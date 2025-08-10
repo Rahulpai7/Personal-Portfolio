@@ -1,7 +1,11 @@
 // Theme Management
 class ThemeManager {
     constructor() {
-        this.theme = localStorage.getItem('theme') || 'dark';
+        try {
+            this.theme = localStorage.getItem('theme') || 'dark';
+        } catch (error) {
+            this.theme = 'dark';
+        }
         this.init();
     }
 
@@ -19,25 +23,20 @@ class ThemeManager {
     }
 
     updateToggleLabel() {
-        const toggleLabel = document.querySelector('.toggle-label');
-        if (toggleLabel) {
-            toggleLabel.textContent = this.theme === 'light' ? 'Light Mode' : 'Dark Mode';
-        }
+        // No label to update since toggle is now in navbar
     }
 
     toggleTheme() {
         this.theme = this.theme === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', this.theme);
-        localStorage.setItem('theme', this.theme);
         
-        // Update toggle label
+        try {
+            localStorage.setItem('theme', this.theme);
+        } catch (error) {
+            console.warn('Failed to save theme preference');
+        }
+        
         this.updateToggleLabel();
-        
-        // Add smooth transition
-        document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
-        setTimeout(() => {
-            document.body.style.transition = '';
-        }, 300);
     }
 }
 
@@ -66,22 +65,28 @@ class LoadingManager {
     }
 
     init() {
-        console.log('Loading screen initialized'); // Debug log
         this.typeMessages();
         this.updateProgress();
-        setTimeout(() => this.hideLoading(), 4000);
+        
+        // Wait for actual content to load
+        Promise.all([
+            new Promise(resolve => setTimeout(resolve, 3000)),
+            document.readyState === 'complete' ? Promise.resolve() : new Promise(resolve => window.addEventListener('load', resolve))
+        ]).then(() => this.hideLoading());
     }
 
     typeMessages() {
         const typeMessage = (message, callback) => {
+            if (!this.loadingMessage) return callback();
+            
             let index = 0;
             this.loadingMessage.textContent = '';
             
             const typeInterval = setInterval(() => {
-                this.loadingMessage.textContent += message[index];
-                index++;
-                
-                if (index >= message.length) {
+                if (index < message.length) {
+                    this.loadingMessage.textContent = message.substring(0, index + 1);
+                    index++;
+                } else {
                     clearInterval(typeInterval);
                     setTimeout(callback, 800);
                 }
@@ -104,29 +109,35 @@ class LoadingManager {
 
     updateProgress() {
         let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress += Math.random() * 30;
+        const updateFrame = () => {
+            progress += Math.random() * 2;
             if (progress > 100) progress = 100;
             
             if (this.progressPercentage) {
                 this.progressPercentage.textContent = Math.round(progress) + '%';
             }
             
-            if (progress >= 100) {
-                clearInterval(progressInterval);
+            if (progress < 100) {
+                requestAnimationFrame(updateFrame);
             }
-        }, 200);
+        };
+        requestAnimationFrame(updateFrame);
     }
 
     hideLoading() {
         if (!this.loadingScreen) return;
         
-        console.log('Hiding loading screen'); // Debug log
-        this.loadingScreen.classList.add('hidden');
-        
-        setTimeout(() => {
-            this.loadingScreen.style.display = 'none';
-        }, 1000);
+        try {
+            this.loadingScreen.classList.add('hidden');
+            
+            setTimeout(() => {
+                if (this.loadingScreen) {
+                    this.loadingScreen.style.display = 'none';
+                }
+            }, 1000);
+        } catch (error) {
+            console.warn('Error hiding loading screen:', error);
+        }
     }
 }
 
@@ -138,6 +149,8 @@ class NavigationManager {
         this.hamburger = document.getElementById('hamburger');
         this.navMenu = document.getElementById('nav-menu');
         this.navLinks = document.querySelectorAll('.nav-link');
+        this.NAVBAR_OFFSET = 80;
+        this.scrollTimeout = null;
         this.init();
     }
 
@@ -165,11 +178,11 @@ class NavigationManager {
             });
         });
 
-        // Scroll event for navbar styling
-        window.addEventListener('scroll', () => {
+        // Debounced scroll event for navbar styling
+        window.addEventListener('scroll', this.debounce(() => {
             this.handleScroll();
             this.setActiveLink();
-        });
+        }, 10));
     }
 
     toggleMobileMenu() {
@@ -191,7 +204,7 @@ class NavigationManager {
     scrollToSection(sectionId) {
         const section = document.getElementById(sectionId);
         if (section) {
-            const offsetTop = section.offsetTop - 80;
+            const offsetTop = section.offsetTop - this.NAVBAR_OFFSET;
             window.scrollTo({
                 top: offsetTop,
                 behavior: 'smooth'
@@ -212,6 +225,7 @@ class NavigationManager {
     setActiveLink() {
         const sections = document.querySelectorAll('section');
         const scrollPos = window.scrollY + 200;
+        let activeSection = null;
 
         sections.forEach(section => {
             const sectionTop = section.offsetTop;
@@ -219,14 +233,22 @@ class NavigationManager {
             const sectionId = section.getAttribute('id');
 
             if (scrollPos >= sectionTop && scrollPos < sectionTop + sectionHeight) {
-                this.navLinks.forEach(link => {
-                    link.classList.remove('active');
-                    if (link.getAttribute('href') === `#${sectionId}`) {
-                        link.classList.add('active');
-                    }
-                });
+                activeSection = sectionId;
             }
         });
+
+        if (activeSection) {
+            this.navLinks.forEach(link => {
+                link.classList.toggle('active', link.getAttribute('href') === `#${activeSection}`);
+            });
+        }
+    }
+
+    debounce(func, wait) {
+        return (...args) => {
+            clearTimeout(this.scrollTimeout);
+            this.scrollTimeout = setTimeout(() => func.apply(this, args), wait);
+        };
     }
 }
 
@@ -235,9 +257,7 @@ class TypingManager {
     constructor() {
         this.typedTextElement = document.getElementById('typed-text');
         
-        // ✅ SAFETY CHECK ADDED
         if (!this.typedTextElement) {
-            console.warn('Typed text element not found - skipping TypingManager');
             return;
         }
         
@@ -251,6 +271,7 @@ class TypingManager {
         this.currentTextIndex = 0;
         this.currentCharIndex = 0;
         this.isDeleting = false;
+        this.animationId = null;
         this.init();
     }
 
@@ -283,7 +304,13 @@ class TypingManager {
             typeSpeed = 500;
         }
 
-        setTimeout(() => this.type(), typeSpeed);
+        this.animationId = setTimeout(() => this.type(), typeSpeed);
+    }
+
+    destroy() {
+        if (this.animationId) {
+            clearTimeout(this.animationId);
+        }
     }
 }
 
@@ -294,6 +321,8 @@ class AnimationManager {
             threshold: 0.1,
             rootMargin: '0px 0px -50px 0px'
         };
+        this.observer = null;
+        this.skillObserver = null;
         this.init();
     }
 
@@ -303,7 +332,7 @@ class AnimationManager {
     }
 
     createObserver() {
-        const observer = new IntersectionObserver((entries) => {
+        this.observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     entry.target.classList.add('aos-animate');
@@ -311,35 +340,35 @@ class AnimationManager {
             });
         }, this.observerOptions);
 
-        // ✅ SAFETY CHECK ADDED
         const elementsWithAOS = document.querySelectorAll('[data-aos]');
         if (elementsWithAOS.length > 0) {
             elementsWithAOS.forEach(element => {
-                observer.observe(element);
+                this.observer.observe(element);
             });
         }
     }
 
     animateSkillBars() {
-        const skillObserver = new IntersectionObserver((entries) => {
+        this.skillObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const skillBars = entry.target.querySelectorAll('.skill-progress');
-                    skillBars.forEach(bar => {
+                    skillBars.forEach((bar, index) => {
                         const width = bar.getAttribute('data-width');
-                        setTimeout(() => {
-                            bar.style.width = width + '%';
-                        }, 200);
+                        requestAnimationFrame(() => {
+                            setTimeout(() => {
+                                bar.style.width = width + '%';
+                            }, index * 100);
+                        });
                     });
                 }
             });
         }, this.observerOptions);
 
-        // ✅ SAFETY CHECK ADDED
         const skillsSections = document.querySelectorAll('.skills');
         if (skillsSections.length > 0) {
             skillsSections.forEach(section => {
-                skillObserver.observe(section);
+                this.skillObserver.observe(section);
             });
         }
     }
@@ -372,29 +401,34 @@ class ProjectFilterManager {
     }
 
     filterProjects(filter) {
-        this.projectCards.forEach(card => {
+        // Sanitize filter input
+        const sanitizedFilter = filter.replace(/[^a-zA-Z0-9-_]/g, '');
+        
+        this.projectCards.forEach((card, index) => {
             const category = card.getAttribute('data-category');
             
-            if (filter === 'all' || category === filter) {
+            if (sanitizedFilter === 'all' || category === sanitizedFilter) {
                 card.style.display = 'block';
-                setTimeout(() => {
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, 50);
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, index * 50);
+                });
             } else {
                 card.style.opacity = '0';
                 card.style.transform = 'translateY(20px)';
-                setTimeout(() => {
-                    card.style.display = 'none';
-                }, 300);
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        card.style.display = 'none';
+                    }, 300);
+                });
             }
         });
     }
 
     setActiveFilter(activeButton) {
-        this.filterButtons.forEach(button => {
-            button.classList.remove('active');
-        });
+        this.filterButtons.forEach(button => button.classList.remove('active'));
         activeButton.classList.add('active');
     }
 }
@@ -441,41 +475,79 @@ class ContactFormManager {
     }
 
     async handleSubmit() {
+        if (!this.validateForm()) return;
+        
         const formData = new FormData(this.form);
         const submitButton = this.form.querySelector('button[type="submit"]');
         
-        // Show loading state
-        const originalText = submitButton.innerHTML;
-        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+        if (!submitButton) return;
+        
+        const originalText = submitButton.textContent;
+        submitButton.textContent = 'Sending...';
         submitButton.disabled = true;
 
         try {
+            // Sanitize form data
+            const sanitizedData = {
+                name: this.sanitizeInput(formData.get('name')),
+                email: this.sanitizeInput(formData.get('email')),
+                message: this.sanitizeInput(formData.get('message'))
+            };
+            
             // Simulate form submission (replace with actual endpoint)
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // Show success message
             this.showMessage('Message sent successfully! I\'ll get back to you soon.', 'success');
             this.form.reset();
         } catch (error) {
-            // Show error message
             this.showMessage('Failed to send message. Please try again.', 'error');
         } finally {
-            // Reset button
-            submitButton.innerHTML = originalText;
+            submitButton.textContent = originalText;
             submitButton.disabled = false;
         }
     }
 
+    validateForm() {
+        const name = this.form.querySelector('input[name="name"]')?.value.trim();
+        const email = this.form.querySelector('input[name="email"]')?.value.trim();
+        const message = this.form.querySelector('textarea[name="message"]')?.value.trim();
+        
+        if (!name || !email || !message) {
+            this.showMessage('Please fill in all fields.', 'error');
+            return false;
+        }
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            this.showMessage('Please enter a valid email address.', 'error');
+            return false;
+        }
+        
+        return true;
+    }
+
+    sanitizeInput(input) {
+        if (!input) return '';
+        return input.toString().replace(/<script[^>]*>.*?<\/script>/gi, '').trim();
+    }
+
     showMessage(message, type) {
+        // Remove existing messages
+        const existingMessages = this.form.querySelectorAll('.form-message');
+        existingMessages.forEach(msg => msg.remove());
+        
         const messageElement = document.createElement('div');
         messageElement.className = `form-message ${type}`;
         messageElement.textContent = message;
         
         this.form.appendChild(messageElement);
         
+        const timeout = type === 'error' ? 7000 : 5000;
         setTimeout(() => {
-            messageElement.remove();
-        }, 5000);
+            if (messageElement.parentNode) {
+                messageElement.remove();
+            }
+        }, timeout);
     }
 }
 
@@ -483,7 +555,6 @@ class ContactFormManager {
 function initializeEnhancedSkills() {
     const skillBars = document.querySelectorAll('.skill-progress-enhanced');
     
-    // ✅ SAFETY CHECK ADDED
     if (skillBars.length === 0) return;
     
     const skillObserver = new IntersectionObserver((entries) => {
@@ -492,9 +563,13 @@ function initializeEnhancedSkills() {
                 const skillBar = entry.target;
                 const width = skillBar.getAttribute('data-width');
                 
-                setTimeout(() => {
-                    skillBar.style.width = width + '%';
-                }, 200);
+                if (width && !isNaN(width)) {
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            skillBar.style.width = Math.min(100, Math.max(0, parseInt(width))) + '%';
+                        }, 200);
+                    });
+                }
                 
                 skillObserver.unobserve(skillBar);
             }
@@ -512,9 +587,11 @@ function initializeEnhancedSkills() {
         category.addEventListener('mouseenter', () => {
             const skillItems = category.querySelectorAll('.skill-item-enhanced');
             skillItems.forEach((item, index) => {
-                setTimeout(() => {
-                    item.style.transform = 'translateX(5px)';
-                }, index * 100);
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        item.style.transform = 'translateX(5px)';
+                    }, index * 50);
+                });
             });
         });
         
@@ -557,10 +634,20 @@ document.addEventListener('click', (e) => {
 // Add parallax effect to hero section - FIXED
 const heroBackground = document.querySelector('.hero-background');
 if (heroBackground) {
-    window.addEventListener('scroll', () => {
+    let ticking = false;
+    
+    const updateParallax = () => {
         const scrolled = window.pageYOffset;
-        const speed = scrolled * 0.5;
-        heroBackground.style.transform = `translateY(${speed}px)`;
+        const speed = scrolled * 0.3;
+        heroBackground.style.transform = `translate3d(0, ${speed}px, 0)`;
+        ticking = false;
+    };
+    
+    window.addEventListener('scroll', () => {
+        if (!ticking) {
+            requestAnimationFrame(updateParallax);
+            ticking = true;
+        }
     });
 }
 
@@ -569,24 +656,27 @@ class CursorTrail {
     constructor() {
         this.dots = [];
         this.mouse = { x: 0, y: 0 };
+        this.animationId = null;
+        this.lastTime = 0;
+        this.FPS_LIMIT = 60;
         this.init();
     }
 
     init() {
-        // Create trailing dots
-        for (let i = 0; i < 10; i++) {
+        // Create fewer trailing dots for better performance
+        for (let i = 0; i < 6; i++) {
             const dot = document.createElement('div');
             dot.className = 'cursor-dot';
             dot.style.cssText = `
                 position: fixed;
-                width: 4px;
-                height: 4px;
+                width: 3px;
+                height: 3px;
                 background: var(--accent-primary);
                 border-radius: 50%;
                 pointer-events: none;
                 z-index: 9999;
-                transition: all 0.1s ease;
-                opacity: ${1 - i * 0.1};
+                opacity: ${Math.max(0.1, 1 - i * 0.15)};
+                will-change: transform;
             `;
             document.body.appendChild(dot);
             this.dots.push({ element: dot, x: 0, y: 0 });
@@ -603,26 +693,46 @@ class CursorTrail {
         });
     }
 
-    animate() {
+    animate(currentTime = 0) {
+        // Limit frame rate
+        if (currentTime - this.lastTime < 1000 / this.FPS_LIMIT) {
+            this.animationId = requestAnimationFrame((time) => this.animate(time));
+            return;
+        }
+        
+        this.lastTime = currentTime;
+        
         let x = this.mouse.x;
         let y = this.mouse.y;
+        
+        const SMOOTHING = 0.2;
 
-        this.dots.forEach((dot, index) => {
-            dot.x += (x - dot.x) * 0.3;
-            dot.y += (y - dot.y) * 0.3;
+        this.dots.forEach((dot) => {
+            dot.x += (x - dot.x) * SMOOTHING;
+            dot.y += (y - dot.y) * SMOOTHING;
             
-            dot.element.style.left = `${dot.x}px`;
-            dot.element.style.top = `${dot.y}px`;
+            dot.element.style.transform = `translate3d(${dot.x}px, ${dot.y}px, 0)`;
             
             x = dot.x;
             y = dot.y;
         });
 
-        requestAnimationFrame(() => this.animate());
+        this.animationId = requestAnimationFrame((time) => this.animate(time));
+    }
+    
+    destroy() {
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+        }
+        this.dots.forEach(dot => {
+            if (dot.element.parentNode) {
+                dot.element.parentNode.removeChild(dot.element);
+            }
+        });
     }
 }
 
 // Initialize cursor trail on desktop devices
-if (window.innerWidth > 768) {
+if (window.innerWidth > 768 && !('ontouchstart' in window)) {
     new CursorTrail();
 }

@@ -106,31 +106,48 @@ body {
 
 /* Enhanced Theme Toggle */
 .theme-toggle {
-    position: fixed;
-    top: 2rem;
-    right: 2rem;
     display: flex;
     align-items: center;
-    gap: 12px;
-    z-index: 1000;
     cursor: pointer;
+    padding: 4px;
     transition: all var(--transition-normal);
+}
+
+.theme-toggle:hover {
+    transform: scale(1.05);
 }
 
 .toggle-track {
-    width: 60px;
-    height: 30px;
-    background: var(--bg-tertiary);
-    border: 2px solid var(--border-color);
-    border-radius: 25px;
+    width: 48px;
+    height: 24px;
+    background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+    border: 1px solid var(--border-color);
+    border-radius: 15px;
     position: relative;
-    transition: all var(--transition-normal);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.toggle-track::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+}
+
+.theme-toggle:hover .toggle-track::before {
+    transform: translateX(100%);
 }
 
 .toggle-thumb {
-    width: 24px;
-    height: 24px;
-    background: var(--bg-primary);
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(135deg, #ffffff, #f0f0f0);
     border-radius: 50%;
     position: absolute;
     top: 1px;
@@ -138,58 +155,58 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px var(--shadow-color);
-    border: 1px solid var(--border-color);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 [data-theme="light"] .toggle-thumb {
-    transform: translateX(28px);
-    background: white;
+    transform: translateX(22px);
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.4);
 }
 
 [data-theme="light"] .toggle-track {
-    background: var(--accent-primary);
-    border-color: var(--accent-primary);
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-color: #3b82f6;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .toggle-thumb i {
-    font-size: 0.75rem;
-    transition: all 0.3s ease;
+    font-size: 0.6rem;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dark-icon {
-    color: var(--accent-primary);
+    color: #6366f1;
     display: block;
+    transform: rotate(0deg);
 }
 
 .light-icon {
-    color: #fbbf24;
+    color: #ffffff;
     display: none;
+    transform: rotate(180deg);
 }
 
 [data-theme="light"] .light-icon {
     display: block;
+    transform: rotate(0deg);
 }
 
 [data-theme="light"] .dark-icon {
     display: none;
+    transform: rotate(-180deg);
 }
 
-.toggle-label {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    user-select: none;
-    min-width: 80px;
-}
 
-.theme-toggle:hover .toggle-track {
+
+.theme-toggle:hover .toggle-thumb {
     transform: scale(1.05);
 }
 
-.theme-toggle:hover .toggle-thumb {
-    box-shadow: 0 4px 12px var(--shadow-color);
+[data-theme="light"] .theme-toggle:hover .toggle-thumb {
+    transform: translateX(22px) scale(1.05);
 }
 
 /* Navigation */
@@ -1849,6 +1866,37 @@ body {
     background: var(--bg-primary);
     padding: 0 0.5rem;
     color: var(--accent-primary);
+}
+
+.form-message {
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-top: var(--spacing-md);
+    font-weight: 500;
+    animation: slideIn 0.3s ease;
+}
+
+.form-message.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.form-message.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Footer */
